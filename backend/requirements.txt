@@ -18,3 +18,5 @@ google-genai>=0.1.0
 groq>=0.5.0
 psycopg2-binary>=2.9.9
 psycopg[binary]
+ddgs>=8.0.0
+
