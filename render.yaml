@@ -18,4 +18,4 @@ services:
       - key: CRON_SECRET
         generateValue: true
       - key: DATABASE_URL
-        value: sqlite:///./signal_stack.db
+        sync: false
