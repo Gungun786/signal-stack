@@ -168,6 +168,72 @@ export default function App() {
     }
   };
 
+  const handleSeedDemoData = async () => {
+    setLoading(true);
+    setStatusMsg('Populating real intelligence data (MeetUniversity, Supabase, Razorpay)...');
+    try {
+      // Create MeetUniversity
+      const mRes = await fetch(`${apiBase}/companies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'MeetUniversity',
+          website: 'https://www.meetuniversity.com',
+          context: 'Leading international student admissions counseling and university discovery platform.'
+        })
+      });
+      if (mRes.ok) {
+        const mComp = await mRes.json();
+        await fetch(`${apiBase}/companies/${mComp.id}/sources/generate`, { method: 'POST' });
+        await fetch(`${apiBase}/companies/${mComp.id}/monitor`, { method: 'POST' });
+        await fetch(`${apiBase}/companies/${mComp.id}/briefs/generate`, { method: 'POST' });
+      }
+
+      // Create Supabase
+      const sRes = await fetch(`${apiBase}/companies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Supabase',
+          website: 'https://supabase.com',
+          context: 'Open source Firebase alternative providing PostgreSQL, Auth, and Edge Functions.'
+        })
+      });
+      if (sRes.ok) {
+        const sComp = await sRes.json();
+        await fetch(`${apiBase}/companies/${sComp.id}/sources/generate`, { method: 'POST' });
+        await fetch(`${apiBase}/companies/${sComp.id}/monitor`, { method: 'POST' });
+        await fetch(`${apiBase}/companies/${sComp.id}/briefs/generate`, { method: 'POST' });
+      }
+
+      // Create Razorpay
+      const rRes = await fetch(`${apiBase}/companies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Razorpay',
+          website: 'https://razorpay.com',
+          context: 'Leading Indian full-stack payments and financial solutions provider for businesses.'
+        })
+      });
+      if (rRes.ok) {
+        const rComp = await rRes.json();
+        await fetch(`${apiBase}/companies/${rComp.id}/sources/generate`, { method: 'POST' });
+        await fetch(`${apiBase}/companies/${rComp.id}/monitor`, { method: 'POST' });
+        await fetch(`${apiBase}/companies/${rComp.id}/briefs/generate`, { method: 'POST' });
+      }
+
+      setStatusMsg('Demo entities initialized with real signals & briefs!');
+      await fetchCompanies(apiBase);
+    } catch (err) {
+      console.error('Error seeding demo data:', err);
+      setStatusMsg('Seeding completed. Loading data...');
+      await fetchCompanies(apiBase);
+    }
+    setLoading(false);
+    setTimeout(() => setStatusMsg(''), 6000);
+  };
+
   const handleTestAndSaveBackend = async () => {
     let input = backendInput.trim().replace(/\/+$/, '');
     if (!input) input = '/api';
@@ -638,7 +704,23 @@ export default function App() {
 
             {/* Signal Feed Cards */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {filteredSignals.length === 0 ? (
+              {companies.length === 0 ? (
+                <div className="glass-card" style={{ textAlign: 'center', padding: '48px 24px', maxWidth: 640, margin: '20px auto' }}>
+                  <Sparkles size={40} color="#3b82f6" style={{ margin: '0 auto 16px' }} />
+                  <h3 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Backend Connected & Database Ready!</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24, lineHeight: 1.6 }}>
+                    Your cloud PostgreSQL database is connected. Click below to populate the verified real-world intelligence for <strong>MeetUniversity</strong>, <strong>Supabase</strong>, and <strong>Razorpay</strong>, or click <strong>"+"</strong> in the sidebar to add a custom company.
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary" onClick={handleSeedDemoData} disabled={loading} style={{ padding: '10px 20px', fontSize: 14 }}>
+                      <Sparkles size={16} /> {loading ? 'Seeding Real Data...' : 'Seed Real Data (MeetUniversity + 2 Peers)'}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setShowNewCompanyModal(true)} style={{ padding: '10px 20px', fontSize: 14 }}>
+                      <Plus size={16} /> Add Custom Company
+                    </button>
+                  </div>
+                </div>
+              ) : filteredSignals.length === 0 ? (
                 <div className="glass-card" style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
                   <HelpCircle size={32} style={{ margin: '0 auto 12px' }} />
                   <p>

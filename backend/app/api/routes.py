@@ -35,6 +35,38 @@ router = APIRouter(prefix="/api")
 
 # --- 1. COMPANIES & SETUP ---
 
+@router.post("/seed")
+def seed_demo_data(db: Session = Depends(get_db)):
+    """Populates demo entities with full research, sources, and real signals."""
+    from run_demos import run_company_workflow
+    try:
+        # MeetUniversity
+        m_id = run_company_workflow(
+            name="MeetUniversity",
+            website="https://www.meetuniversity.com",
+            initial_context="Leading international student admissions counseling platform."
+        )
+        # Supabase
+        s_id = run_company_workflow(
+            name="Supabase",
+            website="https://supabase.com",
+            initial_context="Open source Firebase alternative providing PostgreSQL, Auth, and Edge Functions.",
+            custom_competitors=["Firebase", "Hasura", "Appwrite", "Neon Postgres", "PlanetScale"],
+            custom_market=["PostgreSQL 17 release", "Serverless database pricing", "Vector database benchmarks AI"]
+        )
+        # Razorpay
+        r_id = run_company_workflow(
+            name="Razorpay",
+            website="https://razorpay.com",
+            initial_context="Leading Indian full-stack payments and financial solutions provider for businesses.",
+            custom_competitors=["Stripe", "Cashfree Payments", "Pine Labs", "PayU India", "PhonePe Payment Gateway"],
+            custom_market=["RBI Payment Aggregator license guidelines", "UPI credit line regulations", "Cross border remittance India"]
+        )
+        return {"status": "success", "companies": [m_id, s_id, r_id]}
+    except Exception as e:
+        logger.error(f"Error seeding data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/companies", response_model=CompanyResponse)
 def create_company(payload: CompanyCreate, db: Session = Depends(get_db)):
     existing = db.query(Company).filter(Company.name == payload.name).first()
