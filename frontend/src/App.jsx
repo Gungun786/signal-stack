@@ -3,15 +3,27 @@ import {
   Layers, Compass, Newspaper, CheckCircle2, AlertTriangle, FileText,
   Upload, Settings as SettingsIcon, RefreshCw, Plus, Check, ChevronRight,
   ExternalLink, ShieldCheck, HelpCircle, Activity, ArrowUpRight, Clock,
-  Calendar, Building2, Download, AlertCircle, Sparkles, Filter, ChevronDown
+  Calendar, Building2, Download, AlertCircle, Sparkles, Filter, ChevronDown,
+  Link, Wifi, WifiOff
 } from 'lucide-react';
 
-const API_BASE = '/api';
+const getInitialApiBase = () => {
+  const saved = localStorage.getItem('signal_stack_backend_url');
+  if (saved) return saved.replace(/\/+$/, '');
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL.replace(/\/+$/, '');
+  return '/api';
+};
 
 export default function App() {
+  const [apiBase, setApiBase] = useState(getInitialApiBase);
+  const [backendStatus, setBackendStatus] = useState('checking'); // 'connected' | 'disconnected' | 'checking'
+  const [showBackendModal, setShowBackendModal] = useState(false);
+  const [backendInput, setBackendInput] = useState(apiBase);
+  const [backendTestMsg, setBackendTestMsg] = useState('');
+
   const [companies, setCompanies] = useState([]);
   const [activeCompany, setActiveCompany] = useState(null);
-  const [currentTab, setCurrentTab] = useState('feed'); // 'feed', 'brief', 'sources', 'profile', 'interview', 'upload', 'pivot', 'logs', 'settings'
+  const [currentTab, setCurrentTab] = useState('feed');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
@@ -49,83 +61,150 @@ export default function App() {
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
   const [newCompanyForm, setNewCompanyForm] = useState({ name: '', website: '', context: '' });
 
-  // Fetch Companies on Load
+  // Fetch Companies on Load & whenever apiBase changes
   useEffect(() => {
-    fetchCompanies();
-    fetchSchedulerLogs();
-  }, []);
+    fetchCompanies(apiBase);
+    fetchSchedulerLogs(apiBase);
+  }, [apiBase]);
 
   // When Active Company Changes, reload data
   useEffect(() => {
     if (activeCompany) {
-      loadCompanyData(activeCompany.id);
+      loadCompanyData(activeCompany.id, apiBase);
     }
-  }, [activeCompany]);
+  }, [activeCompany, apiBase]);
 
-  const fetchCompanies = async () => {
+  const fetchCompanies = async (baseUrl = apiBase) => {
+    setBackendStatus('checking');
     try {
-      const res = await fetch(`${API_BASE}/companies`);
+      const res = await fetch(`${baseUrl}/companies`);
+      if (!res.ok) {
+        setBackendStatus('disconnected');
+        return;
+      }
       const data = await res.json();
-      setCompanies(data);
-      if (data.length > 0 && !activeCompany) {
-        setActiveCompany(data[0]);
+      if (Array.isArray(data)) {
+        setCompanies(data);
+        setBackendStatus('connected');
+        if (data.length > 0 && !activeCompany) {
+          setActiveCompany(data[0]);
+        }
+      } else {
+        setBackendStatus('disconnected');
       }
     } catch (err) {
       console.error('Error fetching companies:', err);
+      setBackendStatus('disconnected');
     }
   };
 
-  const loadCompanyData = async (compId) => {
+  const loadCompanyData = async (compId, baseUrl = apiBase) => {
     setLoading(true);
     try {
       // 1. Signals Feed
-      const sigRes = await fetch(`${API_BASE}/companies/${compId}/signals`);
-      const sigData = await sigRes.json();
-      setSignals(sigData);
+      const sigRes = await fetch(`${baseUrl}/companies/${compId}/signals`);
+      if (sigRes.ok) {
+        const sigData = await sigRes.json();
+        setSignals(sigData);
+      }
 
       // 2. Sources
-      const srcRes = await fetch(`${API_BASE}/companies/${compId}/sources`);
-      const srcData = await srcRes.json();
-      setSources(srcData);
+      const srcRes = await fetch(`${baseUrl}/companies/${compId}/sources`);
+      if (srcRes.ok) {
+        const srcData = await srcRes.json();
+        setSources(srcData);
+      }
 
       // 3. Profile
-      const profRes = await fetch(`${API_BASE}/companies/${compId}/profile`);
-      const profData = await profRes.json();
-      setProfile(profData);
+      const profRes = await fetch(`${baseUrl}/companies/${compId}/profile`);
+      if (profRes.ok) {
+        const profData = await profRes.json();
+        setProfile(profData);
+      }
 
       // 4. Briefs
-      const briefRes = await fetch(`${API_BASE}/companies/${compId}/briefs`);
-      const briefData = await briefRes.json();
-      setBriefs(briefData);
-      if (briefData.length > 0) setCurrentBrief(briefData[0]);
+      const briefRes = await fetch(`${baseUrl}/companies/${compId}/briefs`);
+      if (briefRes.ok) {
+        const briefData = await briefRes.json();
+        setBriefs(briefData);
+        if (briefData.length > 0) setCurrentBrief(briefData[0]);
+      }
 
       // 5. Interview Questions
-      const intRes = await fetch(`${API_BASE}/companies/${compId}/interview/all`);
-      const intData = await intRes.json();
-      setInterviewQuestions(intData);
+      const intRes = await fetch(`${baseUrl}/companies/${compId}/interview/all`);
+      if (intRes.ok) {
+        const intData = await intRes.json();
+        setInterviewQuestions(intData);
+      }
 
       // 6. Current Interview Step
-      const currRes = await fetch(`${API_BASE}/companies/${compId}/interview/current`);
-      const currData = await currRes.json();
-      setCurrentQuestion(currData);
+      const currRes = await fetch(`${baseUrl}/companies/${compId}/interview/current`);
+      if (currRes.ok) {
+        const currData = await currRes.json();
+        setCurrentQuestion(currData);
+      }
 
       // 7. Pivot Logs
-      const pivRes = await fetch(`${API_BASE}/companies/${compId}/context-changes`);
-      const pivData = await pivRes.json();
-      setPivotLogs(pivData);
+      const pivRes = await fetch(`${baseUrl}/companies/${compId}/context-changes`);
+      if (pivRes.ok) {
+        const pivData = await pivRes.json();
+        setPivotLogs(pivData);
+      }
     } catch (e) {
       console.error('Error loading company data:', e);
     }
     setLoading(false);
   };
 
-  const fetchSchedulerLogs = async () => {
+  const fetchSchedulerLogs = async (baseUrl = apiBase) => {
     try {
-      const res = await fetch(`${API_BASE}/scheduler/logs`);
-      const data = await res.json();
-      setSchedulerLogs(data);
+      const res = await fetch(`${baseUrl}/scheduler/logs`);
+      if (res.ok) {
+        const data = await res.json();
+        setSchedulerLogs(data);
+      }
     } catch (e) {
       console.error('Error fetching logs:', e);
+    }
+  };
+
+  const handleTestAndSaveBackend = async () => {
+    let input = backendInput.trim().replace(/\/+$/, '');
+    if (!input) input = '/api';
+    if (!input.startsWith('http') && !input.startsWith('/')) {
+      input = `https://${input}`;
+    }
+
+    setBackendTestMsg('Testing connection...');
+    try {
+      // Test URL both with and without /api
+      let targetUrl = input;
+      let res = await fetch(`${targetUrl}/companies`).catch(() => null);
+      if (!res || !res.ok) {
+        if (!targetUrl.endsWith('/api')) {
+          targetUrl = `${targetUrl}/api`;
+          res = await fetch(`${targetUrl}/companies`).catch(() => null);
+        }
+      }
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          localStorage.setItem('signal_stack_backend_url', targetUrl);
+          setApiBase(targetUrl);
+          setBackendStatus('connected');
+          setBackendTestMsg(`Connected successfully! Found ${data.length} companies.`);
+          setTimeout(() => {
+            setShowBackendModal(false);
+            setBackendTestMsg('');
+          }, 1200);
+          fetchCompanies(targetUrl);
+          return;
+        }
+      }
+      setBackendTestMsg('Failed: Backend returned non-JSON or error. Make sure your Render web service is live.');
+    } catch (err) {
+      setBackendTestMsg(`Connection error: ${err.message}. If using Render free tier, allow up to 45s for cold start.`);
     }
   };
 
@@ -134,7 +213,7 @@ export default function App() {
     setLoading(true);
     setStatusMsg('Crawling approved sources & synthesizing signals...');
     try {
-      const res = await fetch(`${API_BASE}/companies/${activeCompany.id}/monitor`, { method: 'POST' });
+      const res = await fetch(`${apiBase}/companies/${activeCompany.id}/monitor`, { method: 'POST' });
       const data = await res.json();
       setStatusMsg(`Monitoring complete: ${data.new_items_crawled} new items, ${data.signals_generated} signals analyzed.`);
       loadCompanyData(activeCompany.id);
@@ -150,7 +229,7 @@ export default function App() {
     setLoading(true);
     setStatusMsg('Compiling Monday Morning Intelligence Brief...');
     try {
-      const res = await fetch(`${API_BASE}/companies/${activeCompany.id}/briefs/generate`, { method: 'POST' });
+      const res = await fetch(`${apiBase}/companies/${activeCompany.id}/briefs/generate`, { method: 'POST' });
       const data = await res.json();
       setCurrentBrief(data);
       setStatusMsg('New Monday Brief compiled successfully!');
@@ -165,7 +244,7 @@ export default function App() {
   const handleAnswerInterview = async (skip = false) => {
     if (!activeCompany || !currentQuestion) return;
     try {
-      await fetch(`${API_BASE}/companies/${activeCompany.id}/interview/answer`, {
+      await fetch(`${apiBase}/companies/${activeCompany.id}/interview/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -175,8 +254,7 @@ export default function App() {
         })
       });
       setInterviewAnswer('');
-      // Reload current question
-      const currRes = await fetch(`${API_BASE}/companies/${activeCompany.id}/interview/current`);
+      const currRes = await fetch(`${apiBase}/companies/${activeCompany.id}/interview/current`);
       const currData = await currRes.json();
       setCurrentQuestion(currData);
       loadCompanyData(activeCompany.id);
@@ -188,12 +266,11 @@ export default function App() {
   const handleToggleAction = async (briefId, index, currentStatus) => {
     const nextStatus = currentStatus === 'completed' ? 'pending' : 'completed';
     try {
-      await fetch(`${API_BASE}/briefs/${briefId}/actions`, {
+      await fetch(`${apiBase}/briefs/${briefId}/actions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action_index: index, status: nextStatus })
       });
-      // Update local state
       const updatedActions = [...currentBrief.recommended_actions];
       updatedActions[index].status = nextStatus;
       setCurrentBrief({ ...currentBrief, recommended_actions: updatedActions });
@@ -207,7 +284,7 @@ export default function App() {
     setLoading(true);
     setStatusMsg('Re-assessing sources against updated strategic focus...');
     try {
-      const res = await fetch(`${API_BASE}/companies/${activeCompany.id}/context-change`, {
+      const res = await fetch(`${apiBase}/companies/${activeCompany.id}/context-change`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_context: pivotContext })
@@ -229,7 +306,7 @@ export default function App() {
     setLoading(true);
     setStatusMsg('Creating company and conducting initial research crawl...');
     try {
-      const res = await fetch(`${API_BASE}/companies`, {
+      const res = await fetch(`${apiBase}/companies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newCompanyForm)
@@ -255,7 +332,7 @@ export default function App() {
     setLoading(true);
     setStatusMsg(`Ingesting ${file.name}...`);
     try {
-      const res = await fetch(`${API_BASE}/companies/${activeCompany.id}/internal/upload`, {
+      const res = await fetch(`${apiBase}/companies/${activeCompany.id}/internal/upload`, {
         method: 'POST',
         body: formData
       });
@@ -269,7 +346,6 @@ export default function App() {
     setTimeout(() => setStatusMsg(''), 5000);
   };
 
-  // Filtered Signals
   const filteredSignals = signals.filter(s => {
     if (feedFilter.category && s.category !== feedFilter.category) return false;
     if (feedFilter.signal_type && s.signal_type !== feedFilter.signal_type) return false;
@@ -278,7 +354,6 @@ export default function App() {
     return true;
   });
 
-  // Filtered Sources
   const filteredSources = sources.filter(s => {
     if (sourceCategory === 'all') return true;
     return s.category === sourceCategory;
@@ -313,6 +388,7 @@ export default function App() {
                 if (selected) setActiveCompany(selected);
               }}
             >
+              {companies.length === 0 && <option value="">No companies loaded</option>}
               {companies.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -382,21 +458,79 @@ export default function App() {
           })}
         </nav>
 
-        {/* Source Health Widget */}
+        {/* Backend Connectivity Status Widget */}
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>RADAR HEALTH</span>
-            <span className="badge badge-emerald">Online</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>BACKEND API</span>
+            <span
+              className={`badge ${backendStatus === 'connected' ? 'badge-emerald' : (backendStatus === 'checking' ? 'badge-amber' : 'badge-rose')}`}
+              style={{ cursor: 'pointer' }}
+              onClick={() => setShowBackendModal(true)}
+              title="Click to configure backend URL"
+            >
+              {backendStatus === 'connected' ? 'Connected' : (backendStatus === 'checking' ? 'Connecting...' : 'Set URL')}
+            </span>
           </div>
-          <div style={{ display: 'flex', gap: 4, height: 4, borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ flex: 1, background: '#10b981' }} title="Healthy sources" />
-            <div style={{ width: 12, background: '#f59e0b' }} title="Warning sources" />
-          </div>
+          <button
+            onClick={() => setShowBackendModal(true)}
+            style={{
+              width: '100%',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-secondary)',
+              padding: '6px 10px',
+              borderRadius: 6,
+              fontSize: 11,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>
+              {apiBase}
+            </span>
+            <Link size={12} />
+          </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
       <main className="main-content">
+        {/* Disconnected Backend Warning Banner */}
+        {backendStatus === 'disconnected' && (
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            color: '#fca5a5',
+            padding: '14px 18px',
+            borderRadius: 10,
+            marginBottom: 24,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 16
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <AlertTriangle size={20} color="#ef4444" style={{ flexShrink: 0 }} />
+              <div>
+                <strong style={{ fontSize: 14, color: '#f87171' }}>Backend Connection Required</strong>
+                <p style={{ fontSize: 12, marginTop: 2, color: '#fecaca' }}>
+                  The frontend cannot reach the backend API at <code>{apiBase}</code>.
+                  If you deployed your backend on Render, paste your live Render URL to connect immediately.
+                </p>
+              </div>
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowBackendModal(true)}
+              style={{ background: '#ef4444', flexShrink: 0, fontSize: 12 }}
+            >
+              Set Backend URL
+            </button>
+          </div>
+        )}
+
         {/* Top Header Bar */}
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
           <div>
@@ -409,7 +543,7 @@ export default function App() {
               {currentTab === 'upload' && 'Internal Data & Objection Ingestion'}
               {currentTab === 'pivot' && 'Strategic Context Pivot & Alignment'}
               {currentTab === 'logs' && 'Scheduler & Cron Execution History'}
-              {currentTab === 'settings' && 'Configuration & Free Tier Controls'}
+              {currentTab === 'settings' && 'Configuration & Controls'}
             </h1>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
               Tracking company signals for <strong>{activeCompany ? activeCompany.name : 'All Entities'}</strong>
@@ -425,7 +559,7 @@ export default function App() {
             <button
               className="btn btn-secondary"
               onClick={handleRunMonitor}
-              disabled={loading}
+              disabled={loading || !activeCompany}
               title="Run Crawler Cycle"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -434,7 +568,7 @@ export default function App() {
             <button
               className="btn btn-primary"
               onClick={handleGenerateBrief}
-              disabled={loading}
+              disabled={loading || !activeCompany}
               title="Generate Fresh Brief"
             >
               <Sparkles size={14} />
@@ -507,7 +641,11 @@ export default function App() {
               {filteredSignals.length === 0 ? (
                 <div className="glass-card" style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
                   <HelpCircle size={32} style={{ margin: '0 auto 12px' }} />
-                  <p>No signals matched your active filters. Click 'Crawl & Refresh' to harvest sources.</p>
+                  <p>
+                    {backendStatus === 'disconnected'
+                      ? 'Backend not connected yet. Click "Set Backend URL" in the sidebar to connect.'
+                      : 'No signals found for this entity. Click "Crawl & Refresh" to harvest sources.'}
+                  </p>
                 </div>
               ) : (
                 filteredSignals.map(sig => (
@@ -595,7 +733,7 @@ export default function App() {
 
             {/* Signal Detail Modal */}
             {selectedSignal && (
-              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
                 <div className="glass-card" style={{ maxWidth: 700, width: '100%', maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-secondary)', border: '1px solid rgba(148, 163, 184, 0.3)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <span className="badge badge-blue">{selectedSignal.category.toUpperCase()} SIGNAL</span>
@@ -652,7 +790,6 @@ export default function App() {
           <div>
             {currentBrief ? (
               <div>
-                {/* Brief Meta Header & Exports */}
                 <div className="glass-card" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <span className="badge badge-blue" style={{ marginBottom: 6 }}>WEEKLY EXECUTIVE BRIEF</span>
@@ -664,7 +801,7 @@ export default function App() {
 
                   <div style={{ display: 'flex', gap: 10 }}>
                     <a
-                      href={`${API_BASE}/briefs/${currentBrief.id}/export/markdown`}
+                      href={`${apiBase}/briefs/${currentBrief.id}/export/markdown`}
                       target="_blank"
                       rel="noreferrer"
                       className="btn btn-secondary"
@@ -672,7 +809,7 @@ export default function App() {
                       <Download size={14} /> Export Markdown
                     </a>
                     <a
-                      href={`${API_BASE}/briefs/${currentBrief.id}/export/html`}
+                      href={`${apiBase}/briefs/${currentBrief.id}/export/html`}
                       target="_blank"
                       rel="noreferrer"
                       className="btn btn-secondary"
@@ -748,7 +885,6 @@ export default function App() {
 
                 {/* 3. Opportunities & Risks */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-                  {/* Opportunities */}
                   <div className="glass-card">
                     <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14, color: '#34d399' }}>
                       Strategic Opportunities (3+)
@@ -767,7 +903,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Risks & Threats */}
                   <div className="glass-card">
                     <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 14, color: '#fb7185' }}>
                       Material Risks & Threats
@@ -832,7 +967,6 @@ export default function App() {
         {currentTab === 'sources' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              {/* Category Pill Tabs */}
               <div style={{ display: 'flex', gap: 8 }}>
                 {['all', 'competitors', 'customers', 'market', 'internal'].map(cat => (
                   <button
@@ -854,7 +988,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Sources Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {filteredSources.map(s => (
                 <div key={s.id} className="glass-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -978,7 +1111,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Prior Answers History */}
             <div className="glass-card">
               <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Interview Record (10 Steps)</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1039,7 +1171,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Pivot Logs */}
             <div className="glass-card">
               <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Pivot Audit Trail</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1094,9 +1225,19 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 9: SETTINGS & COST */}
+        {/* TAB 9: SETTINGS & BACKEND CONFIG */}
         {currentTab === 'settings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div className="glass-card">
+              <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>Backend API Connection</h3>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                Active backend endpoint: <code>{apiBase}</code> (Status: <strong style={{ color: backendStatus === 'connected' ? '#34d399' : '#f87171' }}>{backendStatus}</strong>)
+              </p>
+              <button className="btn btn-primary" onClick={() => setShowBackendModal(true)}>
+                <Link size={14} /> Change Backend URL
+              </button>
+            </div>
+
             <div className="glass-card">
               <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>Automation Cadence</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -1123,9 +1264,56 @@ export default function App() {
           </div>
         )}
 
+        {/* MODAL: CONFIGURE BACKEND URL */}
+        {showBackendModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 110, padding: 20 }}>
+            <div className="glass-card" style={{ maxWidth: 520, width: '100%', background: 'var(--bg-secondary)' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Link size={18} color="#3b82f6" /> Connect Backend Service
+              </h3>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+                Enter the URL of your deployed Render service (e.g. <code>https://signal-stack-backend.onrender.com</code>) or your local dev server (<code>http://localhost:8000/api</code>).
+              </p>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Backend Service URL</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="https://your-service.onrender.com"
+                  value={backendInput}
+                  onChange={e => setBackendInput(e.target.value)}
+                />
+              </div>
+
+              {backendTestMsg && (
+                <div style={{
+                  fontSize: 12,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  marginBottom: 14,
+                  background: backendTestMsg.includes('Connected') ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  color: backendTestMsg.includes('Connected') ? '#34d399' : '#fca5a5'
+                }}>
+                  {backendTestMsg}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowBackendModal(false); setBackendTestMsg(''); }}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-primary" onClick={handleTestAndSaveBackend}>
+                  Test & Save URL
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* MODAL: ADD COMPANY */}
         {showNewCompanyModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 20 }}>
             <div className="glass-card" style={{ maxWidth: 500, width: '100%', background: 'var(--bg-secondary)' }}>
               <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>Initialize New Company</h3>
               <form onSubmit={handleCreateCompany} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
